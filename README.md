@@ -4,10 +4,10 @@ A lightweight, peer-to-peer text transfer tool that allows you to copy text from
 
 ## Why CopyBridge?
 
-Many companies block access to GenAI websites. CopyBridge lets you:
+CopyBridge lets you:
 1. Use GenAI on your personal device
 2. Copy the response
-3. Transfer it to your company device via P2P connection
+3. Transfer it to another device via P2P connection
 4. No data is stored - everything transfers directly between browsers
 
 ## Features
@@ -20,8 +20,8 @@ Many companies block access to GenAI websites. CopyBridge lets you:
 
 ## How It Works
 
-1. **Device A** (personal): Click "Create Room" to generate a 4-character code
-2. **Device B** (company): Enter the code and click "Join Room"
+1. **Device A** : Click "Create Room" to generate a 4-character code
+2. **Device B**: Enter the code and click "Join Room"
 3. Once connected, paste text and click "Send"
 4. Recipient clicks "Copy to Clipboard"
 
