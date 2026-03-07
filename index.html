@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CopyBridge - P2P Text Transfer</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 60px;
+    }
+
+    .container {
+      background: #16213e;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      padding: 40px;
+      width: 100%;
+      max-width: 900px;
+      margin: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #888;
+      font-size: 14px;
+    }
+
+    .room-section {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .room-code-display {
+      text-align: center;
+      padding: 20px 40px;
+      background: #0f3460;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      display: none;
+      border: 2px solid #e94560;
+    }
+
+    .room-code-display.visible {
+      display: inline-block;
+    }
+
+    .room-code-display .label {
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .room-code-display .code {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      color: #e94560;
+    }
+
+    input[type="text"] {
+      padding: 16px 24px;
+      border: 2px solid #0f3460;
+      border-radius: 10px;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #1a1a2e;
+      color: #fff;
+      width: 180px;
+    }
+
+    input[type="text"]:focus {
+      border-color: #e94560;
+    }
+
+    input[type="text"]::placeholder {
+      text-transform: none;
+      letter-spacing: normal;
+      color: #666;
+    }
+
+    button {
+      padding: 16px 32px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #e94560;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #d63d56;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #0f3460;
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: #1a4a7a;
+    }
+
+    .btn-primary:disabled,
+    .btn-secondary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status {
+      text-align: center;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 24px;
+    }
+
+    .status.disconnected {
+      background: #1a1a2e;
+      color: #666;
+    }
+
+    .status.connecting {
+      background: #2d2a1e;
+      color: #f0ad4e;
+    }
+
+    .status.connected {
+      background: #1e2d23;
+      color: #4caf50;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+
+    .status.disconnected .status-dot {
+      background: #666;
+    }
+
+    .status.connecting .status-dot {
+      background: #f0ad4e;
+      animation: pulse 1s infinite;
+    }
+
+    .status.connected .status-dot {
+      background: #4caf50;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .transfer-section {
+      display: none;
+    }
+
+    .transfer-section.visible {
+      display: block;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .panel {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .panel h3 {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      padding: 16px;
+      border: 2px solid #0f3460;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #16213e;
+      color: #fff;
+      line-height: 1.6;
+    }
+
+    textarea:focus {
+      border-color: #e94560;
+    }
+
+    .send-btn {
+      width: 100%;
+      margin-top: 16px;
+    }
+
+    .received-section {
+      display: block;
+    }
+
+    .received-section.visible {
+      display: block;
+    }
+
+    .received-content {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 16px;
+      min-height: 200px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      color: #fff;
+      line-height: 1.6;
+      overflow-y: auto;
+      max-height: 300px;
+    }
+
+    .copy-btn {
+      width: 100%;
+      margin-top: 16px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn-group button {
+      min-width: 160px;
+    }
+
+    .divider {
+      display: none;
+    }
+
+    .tutorial {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid #0f3460;
+    }
+
+    .tutorial h2 {
+      font-size: 16px;
+      color: #e94560;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .tutorial ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #aaa;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .tutorial li {
+      margin-bottom: 8px;
+    }
+
+    .tutorial strong {
+      color: #fff;
+    }
+
+    .tutorial .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .tutorial .step-num {
+      background: #e94560;
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .tutorial .step-text {
+      color: #aaa;
+      font-size: 14px;
+      line-height: 1.6;
+      padding-top: 2px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        margin: 10px;
+        padding: 24px;
+      }
+
+      .panels {
+        grid-template-columns: 1fr;
+      }
+
+      .room-section {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .btn-group {
+        flex-direction: column;
+      }
+
+      .btn-group button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>CopyBridge</h1>
+      <p>Peer-to-peer text transfer between devices</p>
+    </div>
+
+    <div class="tutorial">
+      <h2>How to Use</h2>
+      <div class="step">
+        <span class="step-num">1</span>
+        <span class="step-text"><strong>Device A</strong> (personal): Click <strong>Create Room</strong> to get a 4-character code</span>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <span class="step-text"><strong>Device B</strong> (company): Enter the code and click <strong>Join Room</strong></span>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <span class="step-text"><strong>Paste text</strong> on either device and click <strong>Send</strong></span>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <span class="step-text">Recipient clicks <strong>Copy to Clipboard</strong> to copy received text</span>
+      </div>
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #0f3460; color: #666; font-size: 12px;">
+        <strong>Privacy:</strong> All data transfers directly between devices. Nothing is stored on any server.
+      </div>
+    </div>
+
+    <div class="room-section">
+      <div class="room-code-display" id="roomCodeDisplay">
+        <div class="label">Room Code</div>
+        <div class="code" id="roomCode">----</div>
+      </div>
+
+      <div class="btn-group" id="createJoinButtons">
+        <button class="btn-primary" id="createBtn">Create Room</button>
+        <button class="btn-secondary" id="joinBtn">Join Room</button>
+      </div>
+
+      <div class="join-section" id="joinSection" style="display: none;">
+        <input type="text" id="roomCodeInput" placeholder="CODE" maxlength="4">
+        <button class="btn-primary" id="joinConfirmBtn">Join</button>
+      </div>
+    </div>
+
+    <div class="status disconnected" id="status">
+      <span class="status-dot"></span>
+      <span id="statusText">Not connected</span>
+    </div>
+
+    <div class="transfer-section" id="transferSection">
+      <div class="panels">
+        <div class="panel">
+          <h3>Send Text</h3>
+          <textarea id="textInput" placeholder="Paste or type text here to send..."></textarea>
+          <button class="btn-primary send-btn" id="sendBtn">Send</button>
+        </div>
+
+        <div class="panel">
+          <h3>Received</h3>
+          <div class="received-section visible" id="receivedSection">
+            <div class="received-content" id="receivedContent">Waiting for text...</div>
+            <button class="btn-secondary copy-btn" id="copyReceivedBtn">Copy to Clipboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ROOM_PREFIX = 'copybridge-';
+    let peer = null;
+    let conn = null;
+    let isHost = false;
+    let roomCode = '';
+
+    const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+    const roomCodeEl = document.getElementById('roomCode');
+    const createJoinButtons = document.getElementById('createJoinButtons');
+    const joinSection = document.getElementById('joinSection');
+    const roomCodeInput = document.getElementById('roomCodeInput');
+    const joinConfirmBtn = document.getElementById('joinConfirmBtn');
+    const createBtn = document.getElementById('createBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const status = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const transferSection = document.getElementById('transferSection');
+    const textInput = document.getElementById('textInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const receivedSection = document.getElementById('receivedSection');
+    const receivedContent = document.getElementById('receivedContent');
+    const copyReceivedBtn = document.getElementById('copyReceivedBtn');
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function setStatus(state, text) {
+      status.className = 'status ' + state;
+      statusText.textContent = text;
+    }
+
+    function showTransferUI() {
+      transferSection.classList.add('visible');
+    }
+
+    function showReceived(text) {
+      receivedContent.textContent = text;
+      receivedSection.classList.add('visible');
+    }
+
+    createBtn.addEventListener('click', () => {
+      isHost = true;
+      roomCode = generateRoomCode();
+      
+      peer = new Peer(ROOM_PREFIX + roomCode, {
+        debug: 0
+      });
+
+      setStatus('connecting', 'Creating room...');
+
+      peer.on('open', (id) => {
+        roomCodeEl.textContent = roomCode;
+        roomCodeDisplay.classList.add('visible');
+        createJoinButtons.style.display = 'none';
+        setStatus('disconnected', 'Waiting for peer to join');
+      });
+
+      peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnection();
+      });
+
+      peer.on('error', (err) => {
+        console.error(err);
+        if (err.type === 'unavailable-id') {
+          setStatus('disconnected', 'Room code taken, try again');
+        } else {
+          setStatus('disconnected', 'Connection error');
+        }
+      });
+    });
+
+    joinBtn.addEventListener('click', () => {
+      joinSection.style.display = 'flex';
+      roomCodeInput.focus();
+    });
+
+    joinConfirmBtn.addEventListener('click', () => {
+      const code = roomCodeInput.value.toUpperCase().trim();
+      if (code.length !== 4) {
+        alert('Please enter a 4-character room code');
+        return;
+      }
+
+      isHost = false;
+      roomCode = code;
+
+      peer = new Peer({
+        debug: 0
+      });
+
+      setStatus('connecting', 'Connecting...');
+
+      peer.on('open', () => {
+        conn = peer.connect(ROOM_PREFIX + roomCode, {
+          reliable: true
+        });
+
+        setupConnection();
+      });
+
+      peer.on('error', (err) => {
+        console.error(err);
+        setStatus('disconnected', 'Could not find room');
+      });
+    });
+
+    function setupConnection() {
+      conn.on('open', () => {
+        setStatus('connected', 'Connected');
+        createJoinButtons.style.display = 'none';
+        joinSection.style.display = 'none';
+        roomCodeDisplay.classList.add('visible');
+        roomCodeEl.textContent = roomCode;
+        showTransferUI();
+      });
+
+      conn.on('data', (data) => {
+        if (data.type === 'text') {
+          showReceived(data.content);
+        }
+      });
+
+      conn.on('close', () => {
+        setStatus('disconnected', 'Connection lost');
+        transferSection.classList.remove('visible');
+        receivedContent.textContent = 'Waiting for text...';
+      });
+
+      conn.on('error', (err) => {
+        console.error(err);
+        setStatus('disconnected', 'Connection error');
+      });
+    }
+
+    sendBtn.addEventListener('click', () => {
+      const text = textInput.value;
+      if (!text || !conn) return;
+
+      conn.send({
+        type: 'text',
+        content: text
+      });
+
+      textInput.value = '';
+    });
+
+    copyReceivedBtn.addEventListener('click', () => {
+      const text = receivedContent.textContent;
+      if (text && text !== 'Waiting for text...') {
+        navigator.clipboard.writeText(text).then(() => {
+          copyReceivedBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            copyReceivedBtn.textContent = 'Copy to Clipboard';
+          }, 2000);
+        });
+      }
+    });
+
+    roomCodeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        joinConfirmBtn.click();
+      }
+    });
+
+    textInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        sendBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>
