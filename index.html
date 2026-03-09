@@ -446,6 +446,25 @@
   </div>
 
   <script>
+    const iceServers = [
+      { urls: 'stun:openrelay.metered.ca:80' },
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ];
+
     const ROOM_PREFIX = 'copybridge-';
     let peer = null;
     let conn = null;
@@ -497,7 +516,8 @@
       roomCode = generateRoomCode();
       
       peer = new Peer(ROOM_PREFIX + roomCode, {
-        debug: 0
+        debug: 0,
+        config: { iceServers }
       });
 
       setStatus('connecting', 'Creating room...');
@@ -540,7 +560,8 @@
       roomCode = code;
 
       peer = new Peer({
-        debug: 0
+        debug: 0,
+        config: { iceServers }
       });
 
       setStatus('connecting', 'Connecting...');
