@@ -446,8 +446,12 @@
   </div>
 
   <script>
-    const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
-    const TOPIC_PREFIX = 'copybridge/';
+    const MQTT_BROKERS = [
+      'wss://broker.emqx.io:8084/mqtt',
+      'wss://broker.hivemq.com:8884/mqtt',
+      'wss://test.mosquitto.org:8084'
+    ];
+    let currentBrokerIndex = 0;
     let client = null;
     let roomCode = '';
     let peerId = Math.random().toString(36).substr(2, 9);
@@ -497,14 +501,27 @@
       const baseTopic = TOPIC_PREFIX + roomCode;
 
       setStatus('connecting', 'Connecting...');
+      console.log('Connecting to broker...');
 
-      client = mqtt.connect(MQTT_BROKER, {
-        clientId: 'copybridge_' + peerId,
+      tryConnect(MQTT_BROKERS[currentBrokerIndex], baseTopic);
+    }
+
+    function tryConnect(brokerUrl, baseTopic) {
+      console.log('Trying broker:', brokerUrl);
+      
+      if (client) {
+        client.end();
+      }
+
+      client = mqtt.connect(brokerUrl, {
+        clientId: 'copybridge_' + peerId + '_' + Math.random().toString(36).substr(2, 5),
         clean: true,
-        connectTimeout: 4000,
+        connectTimeout: 8000,
+        reconnectPeriod: 5000,
       });
 
       client.on('connect', () => {
+        console.log('Connected to broker');
         setStatus('disconnected', 'Waiting for peer...');
         roomCodeEl.textContent = roomCode;
         roomCodeDisplay.classList.add('visible');
@@ -513,7 +530,9 @@
         client.subscribe(baseTopic + '/#', (err) => {
           if (err) {
             console.error('Subscribe error:', err);
+            setStatus('disconnected', 'Subscribe failed');
           } else {
+            console.log('Subscribed, sending join...');
             client.publish(baseTopic + '/join', JSON.stringify({ peerId }));
           }
         });
@@ -552,7 +571,23 @@
       });
 
       client.on('close', () => {
+        console.log('Disconnected');
         setStatus('disconnected', 'Disconnected');
+      });
+
+      client.on('offline', () => {
+        console.log('Broker offline, trying next...');
+        currentBrokerIndex++;
+        if (currentBrokerIndex < MQTT_BROKERS.length) {
+          tryConnect(MQTT_BROKERS[currentBrokerIndex], baseTopic);
+        } else {
+          setStatus('disconnected', 'All brokers failed');
+          currentBrokerIndex = 0;
+        }
+      });
+
+      client.on('error', (err) => {
+        console.error('MQTT Error:', err.message);
       });
     }
 
