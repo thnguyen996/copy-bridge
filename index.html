@@ -513,10 +513,10 @@
         client.subscribe(baseTopic + '/#', (err) => {
           if (err) {
             console.error('Subscribe error:', err);
+          } else {
+            client.publish(baseTopic + '/join', JSON.stringify({ peerId }));
           }
         });
-
-        client.publish(baseTopic + '/join', JSON.stringify({ peerId }));
       });
 
       client.on('message', (topic, message) => {
@@ -528,6 +528,11 @@
           setStatus('connected', 'Connected');
           showTransferUI();
           client.publish(baseTopic + '/ack', JSON.stringify({ peerId }));
+        }
+
+        if (topic.endsWith('/ack')) {
+          setStatus('connected', 'Connected');
+          showTransferUI();
         }
 
         if (topic.endsWith('/text')) {
