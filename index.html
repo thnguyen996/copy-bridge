@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CopyBridge - P2P Text Transfer</title>
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -446,10 +445,11 @@
   </div>
 
   <script>
-    const ROOM_PREFIX = 'copybridge-';
-    let peer = null;
-    let conn = null;
+    const params = new URLSearchParams(window.location.search);
+    const SERVER_URL = params.get('server') || 'wss://copybridge-relay.glitch.me/';
+    let ws = null;
     let roomCode = '';
+    let isConnected = false;
 
     const roomCodeDisplay = document.getElementById('roomCodeDisplay');
     const roomCodeEl = document.getElementById('roomCode');
@@ -491,63 +491,58 @@
       receivedSection.classList.add('visible');
     }
 
-    function setupConnection() {
-      conn.on('open', () => {
-        setStatus('connected', 'Connected');
-        createJoinButtons.style.display = 'none';
-        joinSection.style.display = 'none';
-        roomCodeDisplay.classList.add('visible');
+    function connect(code) {
+      roomCode = code;
+      
+      ws = new WebSocket(SERVER_URL + '?room=' + roomCode);
+
+      setStatus('connecting', 'Connecting...');
+
+      ws.onopen = () => {
+        setStatus('disconnected', 'Waiting for peer...');
         roomCodeEl.textContent = roomCode;
-        showTransferUI();
-      });
+        roomCodeDisplay.classList.add('visible');
+        createJoinButtons.style.display = 'none';
+      };
 
-      conn.on('data', (data) => {
-        if (data.type === 'text') {
-          showReceived(data.content);
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'peer-join') {
+          setStatus('connected', 'Connected');
+          showTransferUI();
         }
-      });
 
-      conn.on('close', () => {
-        setStatus('disconnected', 'Connection lost');
-        transferSection.classList.remove('visible');
-        receivedContent.textContent = 'Waiting for text...';
-      });
+        if (msg.type === 'text') {
+          showReceived(msg.content);
+        }
 
-      conn.on('error', (err) => {
+        if (msg.type === 'peer-leave') {
+          setStatus('disconnected', 'Peer disconnected');
+          transferSection.classList.remove('visible');
+          receivedContent.textContent = 'Waiting for text...';
+        }
+      };
+
+      ws.onclose = () => {
+        if (isConnected) {
+          setStatus('disconnected', 'Connection lost');
+          transferSection.classList.remove('visible');
+          receivedContent.textContent = 'Waiting for text...';
+        }
+        isConnected = false;
+      };
+
+      ws.onerror = (err) => {
         console.error(err);
         setStatus('disconnected', 'Connection error');
-      });
+      };
     }
 
     createBtn.addEventListener('click', () => {
-      roomCode = generateRoomCode();
-      
-      peer = new Peer(ROOM_PREFIX + roomCode, {
-        debug: 0
-      });
-
-      setStatus('connecting', 'Creating room...');
-
-      peer.on('open', () => {
-        roomCodeEl.textContent = roomCode;
-        roomCodeDisplay.classList.add('visible');
-        createJoinButtons.style.display = 'none';
-        setStatus('disconnected', 'Waiting for peer to join');
-      });
-
-      peer.on('connection', (connection) => {
-        conn = connection;
-        setupConnection();
-      });
-
-      peer.on('error', (err) => {
-        console.error(err);
-        if (err.type === 'unavailable-id') {
-          setStatus('disconnected', 'Room code taken, try again');
-        } else {
-          setStatus('disconnected', 'Connection error');
-        }
-      });
+      const code = generateRoomCode();
+      connect(code);
+      isConnected = true;
     });
 
     joinBtn.addEventListener('click', () => {
@@ -562,36 +557,18 @@
         return;
       }
 
-      roomCode = code;
-
-      peer = new Peer({
-        debug: 0
-      });
-
-      setStatus('connecting', 'Connecting...');
-
-      peer.on('open', () => {
-        conn = peer.connect(ROOM_PREFIX + roomCode, {
-          reliable: true
-        });
-
-        setupConnection();
-      });
-
-      peer.on('error', (err) => {
-        console.error(err);
-        setStatus('disconnected', 'Could not find room');
-      });
+      connect(code);
+      isConnected = true;
     });
 
     sendBtn.addEventListener('click', () => {
       const text = textInput.value;
-      if (!text || !conn) return;
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-      conn.send({
+      ws.send(JSON.stringify({
         type: 'text',
         content: text
-      });
+      }));
 
       textInput.value = '';
     });
