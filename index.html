@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CopyBridge - P2P Text Transfer</title>
-  <script src="https://cdn.jsdelivr.net/npm/trystero@0.22.0/dist/trystero.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/trystero@0.22.0/dist/trystero-nostr.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -447,9 +446,9 @@
   </div>
 
   <script>
-    const APP_NAME = 'copybridge';
-    let room = null;
-    let sendText = null;
+    const ROOM_PREFIX = 'copybridge-';
+    let peer = null;
+    let conn = null;
     let roomCode = '';
 
     const roomCodeDisplay = document.getElementById('roomCodeDisplay');
@@ -492,18 +491,8 @@
       receivedSection.classList.add('visible');
     }
 
-    function joinRoom(code) {
-      roomCode = code;
-      const config = { appId: APP_NAME };
-
-      room = TrysteroNostr.joinRoom(config, roomCode);
-
-      const getPeerId = room.getPeerId();
-      setStatus('connecting', 'Connecting...');
-
-      sendText = room.joinAction('text');
-
-      room.onPeerJoin((peerId) => {
+    function setupConnection() {
+      conn.on('open', () => {
         setStatus('connected', 'Connected');
         createJoinButtons.style.display = 'none';
         joinSection.style.display = 'none';
@@ -512,24 +501,53 @@
         showTransferUI();
       });
 
-      room.onPeerLeave((peerId) => {
-        setStatus('disconnected', 'Peer disconnected');
+      conn.on('data', (data) => {
+        if (data.type === 'text') {
+          showReceived(data.content);
+        }
+      });
+
+      conn.on('close', () => {
+        setStatus('disconnected', 'Connection lost');
         transferSection.classList.remove('visible');
         receivedContent.textContent = 'Waiting for text...';
       });
 
-      room.getAction('text', (text) => {
-        showReceived(text);
+      conn.on('error', (err) => {
+        console.error(err);
+        setStatus('disconnected', 'Connection error');
       });
     }
 
     createBtn.addEventListener('click', () => {
-      const code = generateRoomCode();
-      joinRoom(code);
-      roomCodeEl.textContent = roomCode;
-      roomCodeDisplay.classList.add('visible');
-      createJoinButtons.style.display = 'none';
-      setStatus('disconnected', 'Waiting for peer...');
+      roomCode = generateRoomCode();
+      
+      peer = new Peer(ROOM_PREFIX + roomCode, {
+        debug: 0
+      });
+
+      setStatus('connecting', 'Creating room...');
+
+      peer.on('open', () => {
+        roomCodeEl.textContent = roomCode;
+        roomCodeDisplay.classList.add('visible');
+        createJoinButtons.style.display = 'none';
+        setStatus('disconnected', 'Waiting for peer to join');
+      });
+
+      peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnection();
+      });
+
+      peer.on('error', (err) => {
+        console.error(err);
+        if (err.type === 'unavailable-id') {
+          setStatus('disconnected', 'Room code taken, try again');
+        } else {
+          setStatus('disconnected', 'Connection error');
+        }
+      });
     });
 
     joinBtn.addEventListener('click', () => {
@@ -544,14 +562,37 @@
         return;
       }
 
-      joinRoom(code);
+      roomCode = code;
+
+      peer = new Peer({
+        debug: 0
+      });
+
+      setStatus('connecting', 'Connecting...');
+
+      peer.on('open', () => {
+        conn = peer.connect(ROOM_PREFIX + roomCode, {
+          reliable: true
+        });
+
+        setupConnection();
+      });
+
+      peer.on('error', (err) => {
+        console.error(err);
+        setStatus('disconnected', 'Could not find room');
+      });
     });
 
     sendBtn.addEventListener('click', () => {
       const text = textInput.value;
-      if (!text || !sendText) return;
+      if (!text || !conn) return;
 
-      sendText(text);
+      conn.send({
+        type: 'text',
+        content: text
+      });
+
       textInput.value = '';
     });
 
