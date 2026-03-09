@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CopyBridge - P2P Text Transfer</title>
   <script src="https://cdn.jsdelivr.net/npm/trystero@0.22.0/dist/trystero.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/trystero@0.22.0/dist/trystero-mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/trystero@0.22.0/dist/trystero-nostr.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -496,7 +496,7 @@
       roomCode = code;
       const config = { appId: APP_NAME };
 
-      room = TrysteroMqtt.joinRoom(config, roomCode);
+      room = TrysteroNostr.joinRoom(config, roomCode);
 
       const getPeerId = room.getPeerId();
       setStatus('connecting', 'Connecting...');
