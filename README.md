@@ -1,58 +1,53 @@
 # CopyBridge
 
-A lightweight text transfer tool that lets you copy text between devices.
+A lightweight text transfer tool that lets you copy text between devices using MQTT messaging.
 
 ## How to Use
 
-1. **Deploy the relay server** (required):
-   - Go to [Glitch.com](https://glitch.com) and sign in
-   - Create a new project → "Import from GitHub" 
-   - Or create a "New Project" → "hello-express"
-   - Replace the server code with the contents of `server.js`
-   - Create a `package.json` with: `{"dependencies":{"ws":"^8.16.0"}}`
-   - Copy your server URL (e.g., `https://your-project.glitch.me`)
+1. **Open CopyBridge**: https://thnguyen996.github.io/copybridge
 
-2. **Open CopyBridge**:
-   - Go to: `https://thnguyen996.github.io/copybridge?server=wss://YOUR-SERVER.glitch.me/`
-   - Replace `YOUR-SERVER` with your deployed server URL
+2. **Use**:
+   - Device A: Click "Create Room" → get 4-character code
+   - Device B: Enter the code → "Join Room"
+   - Connected! Send text between devices
 
-3. **Use**:
-   - One device: Click "Create Room" → get 4-char code
-   - Other device: Enter code → "Join Room"
-   - Send text between devices
+## Features
 
-## Deployment
-
-### Frontend (GitHub Pages)
-```bash
-# Already deployed at: https://thnguyen996.github.io/copybridge
-```
-
-### Server (Glitch - Free)
-1. Go to https://glitch.com
-2. Create new project → "hello-express"
-3. Edit `package.json`:
-```json
-{
-  "name": "copybridge",
-  "version": "1.0.0",
-  "main": "server.js",
-  "dependencies": {
-    "ws": "^8.16.0"
-  }
-}
-```
-4. Replace `server.js` with the contents of this repo's `server.js`
-5. Copy your Glitch URL
-
-### Using Custom Server
-Add `?server=WSS://YOUR-SERVER/` to the URL.
+- **No server needed** - Uses public MQTT broker
+- **No accounts** - No login required
+- **Simple** - 4-character room code
+- **Bidirectional** - Either device can send or receive
+- **Works with restricted browsers** - No storage required
 
 ## Tech Stack
 
 - Pure HTML/CSS/JavaScript (no build required)
-- WebSocket relay (ws library)
-- Works with storage-blocked browsers
+- MQTT over WebSocket (EMQX public broker)
+- Works with storage-blocked browsers and firewalls
+
+## How It Works
+
+1. Device A creates a room with a unique 4-character code
+2. Device B joins using that code
+3. Both devices connect to the same MQTT topic
+4. Text messages are sent via the MQTT broker
+5. Data passes through but is never stored
+
+## Deployment
+
+```bash
+# Frontend deployed at: https://thnguyen996.github.io/copybridge
+# To deploy your own copy:
+git clone https://github.com/thnguyen996/copybridge.git
+# Push to your own GitHub repo
+# Enable GitHub Pages in Settings > Pages
+```
+
+## Security
+
+- Room codes are session-only (generated fresh each time)
+- Messages pass through MQTT broker but are not stored
+- Each session uses a unique peer ID
 
 ## License
 
