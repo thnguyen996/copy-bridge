@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CopyBridge - P2P Text Transfer</title>
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -445,11 +446,11 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const SERVER_URL = params.get('server') || 'wss://copybridge-relay.glitch.me/';
-    let ws = null;
+    const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
+    const TOPIC_PREFIX = 'copybridge/';
+    let client = null;
     let roomCode = '';
-    let isConnected = false;
+    let peerId = Math.random().toString(36).substr(2, 9);
 
     const roomCodeDisplay = document.getElementById('roomCodeDisplay');
     const roomCodeEl = document.getElementById('roomCode');
@@ -493,56 +494,66 @@
 
     function connect(code) {
       roomCode = code;
-      
-      ws = new WebSocket(SERVER_URL + '?room=' + roomCode);
+      const baseTopic = TOPIC_PREFIX + roomCode;
 
       setStatus('connecting', 'Connecting...');
 
-      ws.onopen = () => {
+      client = mqtt.connect(MQTT_BROKER, {
+        clientId: 'copybridge_' + peerId,
+        clean: true,
+        connectTimeout: 4000,
+      });
+
+      client.on('connect', () => {
         setStatus('disconnected', 'Waiting for peer...');
         roomCodeEl.textContent = roomCode;
         roomCodeDisplay.classList.add('visible');
         createJoinButtons.style.display = 'none';
-      };
 
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
+        client.subscribe(baseTopic + '/#', (err) => {
+          if (err) {
+            console.error('Subscribe error:', err);
+          }
+        });
 
-        if (msg.type === 'peer-join') {
+        client.publish(baseTopic + '/join', JSON.stringify({ peerId }));
+      });
+
+      client.on('message', (topic, message) => {
+        const msg = JSON.parse(message.toString());
+
+        if (msg.peerId === peerId) return;
+
+        if (topic.endsWith('/join')) {
           setStatus('connected', 'Connected');
           showTransferUI();
+          client.publish(baseTopic + '/ack', JSON.stringify({ peerId }));
         }
 
-        if (msg.type === 'text') {
+        if (topic.endsWith('/text')) {
           showReceived(msg.content);
         }
 
-        if (msg.type === 'peer-leave') {
+        if (topic.endsWith('/leave')) {
           setStatus('disconnected', 'Peer disconnected');
           transferSection.classList.remove('visible');
           receivedContent.textContent = 'Waiting for text...';
         }
-      };
+      });
 
-      ws.onclose = () => {
-        if (isConnected) {
-          setStatus('disconnected', 'Connection lost');
-          transferSection.classList.remove('visible');
-          receivedContent.textContent = 'Waiting for text...';
-        }
-        isConnected = false;
-      };
-
-      ws.onerror = (err) => {
+      client.on('error', (err) => {
         console.error(err);
         setStatus('disconnected', 'Connection error');
-      };
+      });
+
+      client.on('close', () => {
+        setStatus('disconnected', 'Disconnected');
+      });
     }
 
     createBtn.addEventListener('click', () => {
       const code = generateRoomCode();
       connect(code);
-      isConnected = true;
     });
 
     joinBtn.addEventListener('click', () => {
@@ -558,18 +569,14 @@
       }
 
       connect(code);
-      isConnected = true;
     });
 
     sendBtn.addEventListener('click', () => {
       const text = textInput.value;
-      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!text || !client || !client.connected) return;
 
-      ws.send(JSON.stringify({
-        type: 'text',
-        content: text
-      }));
-
+      const baseTopic = TOPIC_PREFIX + roomCode;
+      client.publish(baseTopic + '/text', JSON.stringify({ content: text }));
       textInput.value = '';
     });
 
@@ -594,6 +601,13 @@
     textInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && e.ctrlKey) {
         sendBtn.click();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (client && client.connected) {
+        const baseTopic = TOPIC_PREFIX + roomCode;
+        client.publish(baseTopic + '/leave', JSON.stringify({ peerId }));
       }
     });
   </script>
